@@ -5,3 +5,5 @@ encoder: encoder.c
 
 clean:
 	rm -f encoder *.o
+
+.PHONY: clean
