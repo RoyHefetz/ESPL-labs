@@ -1,9 +1,10 @@
 #include <stdio.h>
+#include <stdlib.h> 
 
 FILE *infile;
 FILE *outfile;
 int debug_mode = 1;        // Debug mode on by default
-char *encoding_key = "0";  // Default key
+const char *encoding_key = "0";  // Default key
 int is_addition = 1;       // Default is addition
 int key_index = 0;         // Current position in encoding key
 int key_length = 1;        // Initialized for default input '0'
@@ -69,6 +70,7 @@ char encode(char c) {
     // Only encode letter or digit characters
     if (is_letter(c) || is_digit(c)) {
         int key_digit = encoding_key[key_index] - '0';  // Convert char to int
+        key_index = (key_index + 1) % key_length;
         
         if (is_letter(c)) {
             char base = (c >= 'a' && c <= 'z') ? 'a' : 'A';
@@ -89,12 +91,6 @@ char encode(char c) {
         }
     }
     
-    // For non-encodable characters
-    if (encoding_key[key_index + 1] != '\0') {
-        key_index++;
-    } else {
-        key_index = 0;
-    }
     return c;
 }
 
