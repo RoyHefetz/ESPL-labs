@@ -1,4 +1,4 @@
-all: Encode
+all: encoder
 
 Encode: encoder.o
 	gcc -g -m32 -Wall -o Encode encoder.o
