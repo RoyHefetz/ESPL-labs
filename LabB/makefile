@@ -1,9 +1,9 @@
 all: AntiVirus
 
-virusDetector: AntiVirus.o
+AntiVirus: AntiVirus.o
 	gcc -g -Wall -o AntiVirus AntiVirus.o
 
-virusDetector.o: virusDetector.c
+AntiVirus.o: AntiVirus.c
 	gcc -g -Wall -c -o AntiVirus.o AntiVirus.c
 
 .PHONY: clean
