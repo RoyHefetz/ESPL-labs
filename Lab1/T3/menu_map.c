@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-struct fun_desc {
+struct fun_desc { //declration
     char *name;
     char (*fun)(char);
 };
@@ -65,8 +65,8 @@ char* map(char *array, int array_length, char (*f)(char)) {
     return mapped_array;
 }
 
-struct fun_desc menu[] = {
-    {"Get string", my_get}, //tochange all of the instructions, to add dprt
+struct fun_desc menu[] = { //new "class"
+    {"Get string", my_get},
     {"Print Decimal", dprt},
     {"Print Hex", xprt},
     {"Print Character", cprt},
@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
             continue;
         }
         
-        int choice = atoi(input);
+        int choice = atoi(input); //reading the input out of the user keyboard
         
         if (choice >= 0 && choice < bound) {
             printf("\nWithin bounds\n");
@@ -116,7 +116,8 @@ int main(int argc, char **argv) {
                 // Copy to carray
                 strncpy(carray, temp, 4);
                 carray[4] = '\n';
-            } else {
+            } 
+            else {
                 char* temp = map(carray, 5, menu[choice].fun);
                 if (temp != NULL) {
                     free(carray);
@@ -126,7 +127,8 @@ int main(int argc, char **argv) {
             }
             
             printf("DONE.\n");
-        } else {
+        } 
+        else {
             printf("Not within bounds\n");
             free(carray);
             exit(0);

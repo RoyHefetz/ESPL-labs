@@ -30,11 +30,7 @@ char decrypt(char c) {
 }
 
 char xprt(char c) {
-    if (c >= 0x20 && c <= 0x7E) {
-        printf("%02X\n", (unsigned char)c);
-    } else {
-        printf(".\n");
-    }
+    printf("%02X\n", (unsigned char)c);
     return c;
 }
 
@@ -64,7 +60,7 @@ int main(int argc, char **argv){
     
     // Test case 2: Testing multiple functions
     printf("\nTest case 2 - multiple functions:\n");
-    int base_len = 5;
+    int base_len = 4;
     char arr3[base_len];
     printf("Please enter %d characters: ", base_len);
     
