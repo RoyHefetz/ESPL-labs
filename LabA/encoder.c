@@ -70,7 +70,6 @@ char encode(char c) {
     // Only encode letter or digit characters
     if (is_letter(c) || is_digit(c)) {
         int key_digit = encoding_key[key_index] - '0';  // Convert char to int
-        key_index = (key_index + 1) % key_length;
         
         if (is_letter(c)) {
             char base = (c >= 'a' && c <= 'z') ? 'a' : 'A';
@@ -91,6 +90,12 @@ char encode(char c) {
         }
     }
     
+    // For non-encodable characters
+    if (encoding_key[key_index + 1] != '\0') {
+        key_index++;
+    } else {
+        key_index = 0;
+    }
     return c;
 }
 
