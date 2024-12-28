@@ -11,8 +11,23 @@
 #define TERMINATED -1
 #define RUNNING 1
 #define SUSPENDED 0
+#define HISTLEN 10
 
 int debug_mode = 0; //Debug mode flag
+
+// History entry structure
+typedef struct history_entry {
+    char* command;
+    struct history_entry* next;
+    struct history_entry* prev;
+} history_entry;
+
+// History list structure
+typedef struct {
+    history_entry* head;
+    history_entry* tail;
+    int size;
+} history_list;
 
 typedef struct process {
     cmdLine* cmd;
@@ -22,6 +37,125 @@ typedef struct process {
 } process;
 
 process* process_list = NULL;
+history_list* hist_list = NULL;
+
+history_list* init_history() {
+    history_list* list = malloc(sizeof(history_list));
+    list->head = NULL;
+    list->tail = NULL;
+    list->size = 0;
+    return list;
+}
+
+void add_to_history(history_list* hist, const char* cmd) {
+    // Don't add empty commands or history commands
+    if (strlen(cmd) == 0 || strcmp(cmd, "history") == 0 || 
+        strcmp(cmd, "!!") == 0 || cmd[0] == '!') {
+        return;
+    }
+
+    history_entry* entry = malloc(sizeof(history_entry));
+    entry->command = strdup(cmd);
+    entry->next = NULL;
+    entry->prev = NULL;
+
+    if (hist->size == 0) {
+        hist->head = entry;
+        hist->tail = entry;
+    } else {
+        entry->prev = hist->tail;
+        hist->tail->next = entry;
+        hist->tail = entry;
+    }
+
+    hist->size++;
+
+    // Remove oldest entry if list is full
+    if (hist->size > HISTLEN) {
+        history_entry* old_head = hist->head;
+        hist->head = hist->head->next;
+        hist->head->prev = NULL;
+        free(old_head->command);
+        free(old_head);
+        hist->size--;
+    }
+}
+
+void print_history(history_list* hist) {
+    if (!hist || hist->size == 0) {
+        printf("No commands in history\n");
+        return;
+    }
+
+    history_entry* current = hist->head;
+    int index = 1;
+    while (current != NULL) {
+        printf("%d %s\n", index++, current->command);
+        current = current->next;
+    }
+}
+
+char* get_command_by_index(history_list* hist, int index) {
+    if (!hist || index < 1 || index > hist->size) {
+        return NULL;
+    }
+
+    history_entry* current = hist->head;
+    int current_index = 1;
+    while (current != NULL && current_index < index) {
+        current = current->next;
+        current_index++;
+    }
+
+    return current ? current->command : NULL;
+}
+
+void free_history(history_list* hist) {
+    if (!hist) return;
+
+    history_entry* current = hist->head;
+    while (current != NULL) {
+        history_entry* next = current->next;
+        free(current->command);
+        free(current);
+        current = next;
+    }
+    free(hist);
+}
+
+int handle_history_command(char* input) {
+    if (strcmp(input, "history") == 0) {
+        print_history(hist_list);
+        return 1;
+    }
+    
+    if (strcmp(input, "!!") == 0) {
+        if (hist_list->size == 0) {
+            printf("No commands in history\n");
+            return 1;
+        }
+        strcpy(input, hist_list->tail->command);
+        return 0;
+    }
+    
+    if (input[0] == '!') {
+        int index = atoi(input + 1);
+        char* cmd = get_command_by_index(hist_list, index);
+        if (cmd == NULL) {
+            printf("Invalid history index\n");
+            return 1;
+        }
+        if (strncmp(cmd, "stop ", 5) == 0 || 
+            strncmp(cmd, "wake ", 5) == 0 || 
+            strncmp(cmd, "term ", 5) == 0) {
+            printf("Warning: Executing historical process management command\n");
+        }
+        strcpy(input, cmd);
+        return 0;
+    }
+    
+    return 0;
+}
 
 void addProcess(process** process_list, cmdLine* cmd, pid_t pid) {
     process* new_process = malloc(sizeof(process));
@@ -36,7 +170,7 @@ void updateProcessStatus(process* process_list, int pid, int status) {
     while (process_list != NULL) {
         if (process_list->pid == pid) {
             process_list->status = status;
-            return;  // Exit after updating
+            return;
         }
         process_list = process_list->next;
     }
@@ -62,14 +196,16 @@ void updateProcessList(process **process_list) {
 }
 
 void printProcessList(process** process_list) {
-    updateProcessList(process_list);  // Update status of all processes
+    updateProcessList(process_list);
     
     process* curr = *process_list;
     process* prev = NULL;
     
     printf("PID\tCommand\t\tSTATUS\n");
     
+    int anyProcesses = 0;
     while (curr != NULL) {
+        anyProcesses = 1;
         const char* status_str;
         switch (curr->status) {
             case TERMINATED: status_str = "Terminated"; break;
@@ -78,10 +214,10 @@ void printProcessList(process** process_list) {
             default: status_str = "Unknown"; break;
         }
         
-        printf("%d\t%s\t\t%s\n", curr->pid, curr->cmd->arguments[0], status_str);
+        printf("%-8d%-16s%s\n", curr->pid, curr->cmd->arguments[0], status_str);
         
+        // Remove terminated processes immediately after showing them
         if (curr->status == TERMINATED) {
-            // Remove terminated process from list
             if (prev == NULL) {
                 *process_list = curr->next;
             } else {
@@ -96,24 +232,24 @@ void printProcessList(process** process_list) {
             curr = curr->next;
         }
     }
+    
+    if (!anyProcesses) {
+        printf("No active processes\n");
+    }
 }
-
 
 void freeProcessList(process* process_list) {
     process* curr = process_list;
     while (curr != NULL) {
         process* next = curr->next;
-
         if (curr->cmd != NULL) {
-            freeCmdLines(curr->cmd);  // Free command line structure
-            curr->cmd = NULL;         // Avoid double-free
+            freeCmdLines(curr->cmd);
+            curr->cmd = NULL;
         }
-
-        free(curr);  // Free process structure
+        free(curr);
         curr = next;
     }
 }
-
 
 void execute_pipeline(cmdLine *cmd1, cmdLine *cmd2) {
     int pipefd[2];
@@ -203,7 +339,6 @@ void execute_pipeline(cmdLine *cmd1, cmdLine *cmd2) {
 }
 
 void execute(cmdLine *pCmdLine) {
-    // Don't track shell commands
     if (strcmp(pCmdLine->arguments[0], "procs") == 0 ||
         strcmp(pCmdLine->arguments[0], "cd") == 0 ||
         strcmp(pCmdLine->arguments[0], "quit") == 0) {
@@ -241,7 +376,6 @@ void execute(cmdLine *pCmdLine) {
         perror("execvp failed");
         _exit(EXIT_FAILURE);
     } else {
-        // Create a deep copy for the process list
         cmdLine* cmd_copy = parseCmdLines(pCmdLine->arguments[0]);
         for (int i = 1; i < pCmdLine->argCount; i++) {
             replaceCmdArg(cmd_copy, i, pCmdLine->arguments[i]);
@@ -288,11 +422,17 @@ void handle_signal(cmdLine *pCmdLine) {
     }
 }
 
-
 int main(int argc, char *argv[]) {
     char cwd[PATH_MAX];
     char input[MAX_INPUT_SIZE];
     cmdLine *cmdL;
+
+    // Initialize history
+    hist_list = init_history();
+    if (hist_list == NULL) {
+        fprintf(stderr, "Failed to initialize history\n");
+        exit(EXIT_FAILURE);
+    }
 
     // Check for debug flag
     for (int i = 1; i < argc; i++) {
@@ -302,11 +442,10 @@ int main(int argc, char *argv[]) {
     }
 
     while (1) {
-        //Display prompt with current working directory
+        // Display prompt with current working directory
         if (getcwd(cwd, PATH_MAX) != NULL) {
             printf("%s> ", cwd);
-        } 
-        else {
+        } else {
             perror("getcwd failed");
             exit(EXIT_FAILURE);
         }
@@ -320,6 +459,12 @@ int main(int argc, char *argv[]) {
         if (strlen(input) == 0) { //Skip empty lines
             continue;
         }
+
+        if (handle_history_command(input)) {
+            continue;
+        }
+
+        add_to_history(hist_list, input);
 
         cmdL = parseCmdLines(input);
         if (cmdL == NULL) {
@@ -335,8 +480,7 @@ int main(int argc, char *argv[]) {
         if (strcmp(cmdL->arguments[0], "cd") == 0) {
             if (cmdL->argCount < 2) {
                 fprintf(stderr, "cd: missing argument\n");
-            } 
-            else if (chdir(cmdL->arguments[1]) == -1) {
+            } else if (chdir(cmdL->arguments[1]) == -1) {
                 perror("cd failed");
             }
             freeCmdLines(cmdL);
@@ -357,12 +501,20 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        // Handle pipeline
+        if (cmdL->next != NULL) {
+            execute_pipeline(cmdL, cmdL->next);
+            freeCmdLines(cmdL);
+            continue;
+        }
+
         // Execute external commands
         execute(cmdL);
         freeCmdLines(cmdL);
     }
-    
+
+    // Clean up before exit
+    freeProcessList(process_list);
+    free_history(hist_list);
     return 0;
 }
-
-
